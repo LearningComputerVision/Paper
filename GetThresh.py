@@ -35,19 +35,29 @@ def detectHandFolder(in_folder):
             filepath=os.path.join(root,filename)
             list_annotation_file.append(filepath)#get file path
    
-    img_map=np.zeros((256,256));
-    tmp_folder="tmp";
+    
+    tmp_folder="tmp2";
     if not os.path.exists(tmp_folder):
         os.mkdir(tmp_folder);
         
-    annotation_file="test\\annotations\\VOC2007_106.mat"
-    file="test\\images\\VOC2007_106.jpg"
+#     annotation_file="test\\annotations\\VOC2007_106.mat"
+#     file="test\\images\\VOC2007_106.jpg"
+#     TrainPhase(list_image_file,list_annotation_file,tmp_folder)
     TestPhase("map_img.txt", list_image_file,list_annotation_file )
-# #         img_map=createImageHist(annotation_fixed,img,img_map,file, tmp_folder);
+       
 # #         boxes, result=Detect_HSV(img, lower,higher);
 #         
 # 
-
+def TrainPhase(list_file, annotation_file, tmp_folder):
+   
+    for file, annotation_file in zip(list_file,annotation_file):
+        print file
+        img_map=np.zeros((256,256));
+        img=cv2.imread(file)
+        img=cv2.GaussianBlur(img, (3,3), 0)
+        annotation, annotation_fixed, img=loadMatFile(annotation_file, img)
+        img_map=createImageHist(annotation_fixed,img,img_map,file, tmp_folder);
+        
 def Detect_HSV(img, lowerb, upperb):
     img_hsv=cv2.cvtColor(img, cv.CV_BGR2HSV)
     skinMask=cv2.inRange(img_hsv, lowerb, upperb)
@@ -149,17 +159,23 @@ def createImageHist(annotation_fixed, img, img_map, name, dir_stored):
     idx=1
     s_name=name.split("_");
     s_name=s_name[len(s_name)-1].split(".");
+    
     for (x,y,w,h) in annotation_fixed:
         if y<0:
             y=0;
         if x<0:
             x=0;
         iimg_hsv=img_hsv[y:y+h,x:x+w];
-       
+        iimg_hsv=cv2.resize(iimg_hsv, (64,64));
+#         cv2.imshow('resize', iimg_hsv)
+#         cv2.waitKey(0)
         for i in xrange(iimg_hsv.shape[0]):
             for j in xrange(iimg_hsv.shape[1]):
                 img_map[iimg_hsv[i,j][0],iimg_hsv[i,j][1]]=img_map[iimg_hsv[i,j][0], iimg_hsv[i,j][1]]+1;
         #create name file
+#         cv2.imshow('winname', img_map)
+#         cv2.waitKey(0)
+#         print img_map
         name_stored=dir_stored+"\\" +s_name[0]+"_"+str(idx)+".bmp";  
         print name_stored;
         img_stored=imageMap(img_map);
@@ -295,15 +311,16 @@ def calculateAvegrate(input_folder):
         print file;
         img=cv2.imread(file,0)
         #Step 2: calculate threshold
-        local_threshold=np.sum(img/255.0);
-
+        local_threshold=np.sum(img);
+#         local_threshold=local_threshold/255.0
         threshold_data.append(local_threshold)
         img_avg=img_avg+img;
         count=count+1;
 
     img_avg=(img_avg/count);
     print "-----------------" 
-    
+    cv2.imshow('avg', img_avg)
+    cv2.waitKey(0)
     cv2.imwrite('avg.bmp', img_avg); 
     threshold_data.sort()
     np.savetxt('map_img.txt', threshold_data, fmt='%-5.2f')
@@ -364,7 +381,7 @@ def TestPhase(file_thresold, list_image_file,list_annotation_file ):
     NP=[];
     N=[];
     
-    for idx in xrange(size_threshold,1,-2):
+    for idx in xrange(size_threshold,99,-1):
         
     #create list file
         for file, annotation_file in zip(list_image_file,list_annotation_file) :
@@ -416,16 +433,19 @@ def TestImage(filename_map, filename, annotationbox, theta):
     gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     img_canny=cv2.Canny(gray, 100, 200)
     M=cv2.imread(filename_map,0);
-    
+    img=cv2.GaussianBlur(img, (3,3), 0)
     #convert HSV
     hsv=cv2.cvtColor(img, cv2.COLOR_BGR2HSV);
     
-    size_w=int(hsv.shape[0]/7);
-    size_h=int(hsv.shape[1]/7);
+    size_w=int(hsv.shape[0]/13);
+    size_h=int(hsv.shape[1]/13);
     
-    print size_w, size_h, hsv.shape[0], hsv.shape[1]
+#     print size_w, size_h, hsv.shape[0], hsv.shape[1]
     
     window_detected=[];
+    M=M;
+
+            
     #create map image for test image
     for i in xrange(0,hsv.shape[0],int(size_w)):
         if (i+size_w)>hsv.shape[0]:
@@ -436,7 +456,7 @@ def TestImage(filename_map, filename, annotationbox, theta):
                 break
           
             window_hsv=hsv[i:i+size_w,j:j+size_h];
-
+            window_hsv=cv2.resize(window_hsv, (64,64))
             if len(window_hsv)==0:
                 print (j+size_h), hsv.shape[1]
                 break;
@@ -448,18 +468,22 @@ def TestImage(filename_map, filename, annotationbox, theta):
             for x in xrange(window_hsv.shape[0]):
                 for y in xrange(window_hsv.shape[1]):
                     I[window_hsv[x,y][0],window_hsv[x,y][1]]=I[window_hsv[x,y][0], window_hsv[x,y][1]]+1;
-                    
+            
+            print M;
             #calculate K image
-            K=(M/255.0)*I;
+            K=np.multiply(M,I);
+#             cv2.imshow('Map', K)
+#             cv2.waitKey(0)
             #calculate threshold          
             v=np.sum(K);
-                
+            print v, theta;
+            
             if v>theta:
                 window_detected.append([j,i,size_h,size_w])
                 
     print "----------"
     #draw window detected and annotation  
-#     drawImage(img, window_detected, annotationbox);         
+    drawImage(img, window_detected, annotationbox);         
     return window_detected
     
 '''
@@ -505,7 +529,9 @@ def boxoverlap(regions_a, region_b, thre):
 if __name__ == '__main__':
     name='test\\';
     name1='D:\\Database\\Database SL\\hand_dataset\\hand_dataset\\test_dataset\\test_data'
+    name2='D:\\Database\\Database SL\\hand_dataset\\hand_dataset\\training_dataset\\training_data'
 #     lower, higher=ScaleThreshold('avg.bmp');
     detectHandFolder(name1);
-#     calculateAvegrate('tmp\\')
+#     calculateAvegrate('tmp2\\')
 #     Test('avg.bmp');
+   
